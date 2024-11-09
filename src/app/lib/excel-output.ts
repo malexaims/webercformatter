@@ -131,8 +131,7 @@ export class ExcelOutput {
       wb.Workbook = {
         Views: [{ RTL: false }],
         Sheets: [{
-          Hidden: 0,
-          Selected: true
+          Hidden: 0
         }]
       };
 
