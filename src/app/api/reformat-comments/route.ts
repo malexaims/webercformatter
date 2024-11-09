@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
-import { Parser } from '@/lib/parser';
-import { ExcelOutput } from '@/lib/excel-output';
+import { Parser } from '@/app/lib/parser';
+import { ExcelOutput } from '@/app/lib/excel-output';
 
 export async function POST(request: Request) {
   try {

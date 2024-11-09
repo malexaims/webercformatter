@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import { Comment } from './parser';
 
 export class ExcelOutput {
+  // Constants for column headers
   private static readonly HEADERS = [
     'Number',
     'Created By',
@@ -15,17 +16,42 @@ export class ExcelOutput {
     'Comment Backchecked'
   ];
 
-  static createHeaderRow(): XLSX.WorkSheet {
+  // Helper to create cell references (e.g., "A1", "B2")
+  private static createCellReference(header: string, index: number): string {
+    return `${header}${index}`;
+  }
+
+  // Create a cell with number value
+  private static createNumberCell(value: number, ref: string): XLSX.CellObject {
+    return {
+      t: 'n', // number type
+      v: value,
+      r: ref
+    };
+  }
+
+  // Create a cell with text value
+  private static createTextCell(value: string, ref: string): XLSX.CellObject {
+    return {
+      t: 's', // string type
+      v: value,
+      r: ref
+    };
+  }
+
+  // Create header row
+  private static createHeaderRow(): XLSX.WorkSheet {
     const ws = XLSX.utils.aoa_to_sheet([this.HEADERS]);
     
-    // Set column widths
+    // Set column widths (similar to OpenXML formatting)
     const wscols = this.HEADERS.map(() => ({ wch: 15 }));
     ws['!cols'] = wscols;
 
     return ws;
   }
 
-  static createContentRow(comment: Comment, index: number): any[] {
+  // Create content row from a comment
+  private static createContentRow(comment: Comment): (string | number)[] {
     return [
       comment.number,           // A: Number
       comment.createdBy,        // B: Created By
@@ -40,6 +66,7 @@ export class ExcelOutput {
     ];
   }
 
+  // Main function to create spreadsheet (equivalent to F# createSpreadsheet)
   static createSpreadsheet(
     filepath: string,
     sheetName: string,
@@ -53,8 +80,8 @@ export class ExcelOutput {
       const worksheet = this.createHeaderRow();
       
       // Add content rows
-      const contentRows = comments.map((comment, idx) => 
-        this.createContentRow(comment, idx + 2)
+      const contentRows = comments.map(comment => 
+        this.createContentRow(comment)
       );
       
       // Add content rows to worksheet starting from row 2
@@ -73,7 +100,7 @@ export class ExcelOutput {
     }
   }
 
-  // Helper method to create a workbook buffer (useful for API responses)
+  // Helper method for API responses (creates buffer instead of file)
   static createWorkbookBuffer(comments: Comment[]): Buffer {
     // Create new workbook
     const workbook = XLSX.utils.book_new();
@@ -82,8 +109,8 @@ export class ExcelOutput {
     const worksheet = this.createHeaderRow();
     
     // Add content rows
-    const contentRows = comments.map((comment, idx) => 
-      this.createContentRow(comment, idx + 2)
+    const contentRows = comments.map(comment => 
+      this.createContentRow(comment)
     );
     
     // Add content rows to worksheet starting from row 2
@@ -93,8 +120,6 @@ export class ExcelOutput {
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Formatted Comments');
     
     // Write to buffer
-    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-    
-    return buffer;
+    return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
   }
 } 
