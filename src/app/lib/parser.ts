@@ -19,30 +19,35 @@ export class Parser {
     // Extract reviewer comments (groups of 4 rows starting with "No")
     const reviewersComments = iRows
       .filter(([, row]) => row[0] === "No")
-      .map(([index]) => rows.slice(index, index + 4));
+      .map(([index,]) => rows.slice(index, index + 5));
 
     // Helper functions to extract specific fields
     // These are direct translations of the F# point-free functions
-    const number = (c: string[][]) => c[0][0];
-    const createdBy = (c: string[][]) => c[2][1];
-    const createdOn = (c: string[][]) => c[2][2];
-    const status = (c: string[][]) => c[0][1];
-    const category = (c: string[][]) => c[0][4];
-    const reference = (c: string[][]) => c[0][3];
-    const content = (c: string[][]) => c[3][1];
+    const number = (c: string[][]) => c[1][0];
+    const createdBy = (c: string[][]) => c[3][2];
+    const createdOn = (c: string[][]) => c[3][5];
+    const status = (c: string[][]) => c[1][2];
+    const category = (c: string[][]) => c[1][9];
+    const reference = (c: string[][]) => c[1][7];
+    const content = (c: string[][]) => c[4][2];
 
     // Map comment groups to Comment objects and sort by number
     // This is equivalent to the F# list comprehension and List.sortBy
-    return reviewersComments
+
+    const comments = reviewersComments
       .map(c => ({
-        number: parseInt(number(c)),
-        createdBy: createdBy(c),
-        createdOn: createdOn(c),
-        status: status(c),
-        category: category(c),
-        reference: reference(c),
-        content: content(c)
+      number: parseInt(number(c)),
+      createdBy: createdBy(c),
+      createdOn: createdOn(c),
+      status: status(c),
+      category: category(c),
+      reference: reference(c),
+      content: content(c)
       }))
       .sort((a, b) => a.number - b.number);
+
+    // console.log(comments);
+
+    return comments;
   }
 } 
