@@ -46,7 +46,7 @@ export class Parser {
       }))
       .sort((a, b) => a.number - b.number);
 
-    // console.log(comments);
+    console.log(comments);
 
     return comments;
   }

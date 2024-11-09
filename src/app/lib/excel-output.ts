@@ -2,7 +2,6 @@ import * as XLSX from 'xlsx';
 import { Comment } from './parser';
 
 export class ExcelOutput {
-  // Constants for column headers
   private static readonly HEADERS = [
     'Number',
     'Created By',
@@ -16,110 +15,132 @@ export class ExcelOutput {
     'Comment Backchecked'
   ];
 
-  // Helper to create cell references (e.g., "A1", "B2")
-  private static createCellReference(header: string, index: number): string {
-    return `${header}${index}`;
-  }
+  private static createWorksheet(comments: Comment[]): XLSX.WorkSheet {
+    // Create the data array (without headers since they'll be added by json_to_sheet)
+    const data = comments.map(comment => ({
+      'Number': comment.number,
+      'Created By': comment.createdBy,
+      'Created On': comment.createdOn,
+      'Status': comment.status,
+      'Category': comment.category,
+      'Reference': comment.reference,
+      'Content': comment.content.replace(/\r\n/g, '\n'),
+      'Response': '',
+      'Comment Addressed': 'False',
+      'Comment Backchecked': 'False'
+    }));
 
-  // Create a cell with number value
-  private static createNumberCell(value: number, ref: string): XLSX.CellObject {
-    return {
-      t: 'n', // number type
-      v: value,
-      r: ref
-    };
-  }
+    // Create worksheet with headers
+    const ws = XLSX.utils.json_to_sheet(data, {
+      header: this.HEADERS,
+      skipHeader: false
+    });
 
-  // Create a cell with text value
-  private static createTextCell(value: string, ref: string): XLSX.CellObject {
-    return {
-      t: 's', // string type
-      v: value,
-      r: ref
-    };
-  }
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 10 },  // Number
+      { wch: 15 },  // Created By
+      { wch: 15 },  // Created On
+      { wch: 12 },  // Status
+      { wch: 15 },  // Category
+      { wch: 15 },  // Reference
+      { wch: 60 },  // Content
+      { wch: 40 },  // Response
+      { wch: 15 },  // Comment Addressed
+      { wch: 15 }   // Comment Backchecked
+    ];
 
-  // Create header row
-  private static createHeaderRow(): XLSX.WorkSheet {
-    const ws = XLSX.utils.aoa_to_sheet([this.HEADERS]);
-    
-    // Set column widths (similar to OpenXML formatting)
-    const wscols = this.HEADERS.map(() => ({ wch: 15 }));
-    ws['!cols'] = wscols;
+    // Get worksheet range
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+
+    // Apply styles to all cells
+    for (let R = range.s.r; R <= range.e.r; ++R) {
+      for (let C = range.s.c; C <= range.e.c; ++C) {
+        const cell = XLSX.utils.encode_cell({ r: R, c: C });
+        if (!ws[cell]) continue;
+
+        // Convert cell to proper format if needed
+        if (typeof ws[cell] === 'number' || typeof ws[cell] === 'string' || typeof ws[cell] === 'boolean') {
+          const value = ws[cell];
+          ws[cell] = {
+            v: value,
+            t: typeof value === 'number' ? 'n' : typeof value === 'boolean' ? 'b' : 's'
+          };
+        }
+
+        // Apply styles based on whether it's a header or content
+        if (!ws[cell].s) ws[cell].s = {};
+        Object.assign(ws[cell].s, R === 0 ? {
+          fill: { fgColor: { rgb: "D3D3D3" }, patternType: 'solid' },
+          font: { bold: true, sz: 12 },
+          alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+          border: {
+            top: { style: 'thin' },
+            bottom: { style: 'thin' },
+            left: { style: 'thin' },
+            right: { style: 'thin' }
+          }
+        } : {
+          font: { sz: 11 },
+          alignment: { vertical: 'center', wrapText: true },
+          border: {
+            top: { style: 'thin' },
+            bottom: { style: 'thin' },
+            left: { style: 'thin' },
+            right: { style: 'thin' }
+          }
+        });
+      }
+    }
 
     return ws;
   }
 
-  // Create content row from a comment
-  private static createContentRow(comment: Comment): (string | number)[] {
-    return [
-      comment.number,           // A: Number
-      comment.createdBy,        // B: Created By
-      comment.createdOn,        // C: Created On
-      comment.status,           // D: Status
-      comment.category,         // E: Category
-      comment.reference,        // F: Reference
-      comment.content,          // G: Content
-      '',                       // H: Response
-      'False',                  // I: Comment Addressed
-      'False'                   // J: Comment Backchecked
-    ];
+  static createWorkbookBuffer(comments: Comment[]): Buffer {
+    const wb = XLSX.utils.book_new();
+    const ws = this.createWorksheet(comments);
+    XLSX.utils.book_append_sheet(wb, ws, 'Formatted Comments');
+    
+    // Set workbook properties
+    wb.Workbook = {
+      Views: [{ RTL: false }],
+      Sheets: [{
+        Hidden: 0,
+      }]
+    };
+
+    return XLSX.write(wb, { 
+      type: 'buffer',
+      bookType: 'xlsx',
+      cellStyles: true,
+      compression: true,
+      Props: {
+        Author: "FDOT Comment Reformatter"
+      },
+      bookSST: false
+    }) as Buffer;
   }
 
-  // Main function to create spreadsheet (equivalent to F# createSpreadsheet)
-  static createSpreadsheet(
-    filepath: string,
-    sheetName: string,
-    comments: Comment[]
-  ): boolean {
+  static createSpreadsheet(filepath: string, sheetName: string, comments: Comment[]): boolean {
     try {
-      // Create new workbook
-      const workbook = XLSX.utils.book_new();
+      const wb = XLSX.utils.book_new();
+      const ws = this.createWorksheet(comments);
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
       
-      // Create worksheet with headers
-      const worksheet = this.createHeaderRow();
-      
-      // Add content rows
-      const contentRows = comments.map(comment => 
-        this.createContentRow(comment)
-      );
-      
-      // Add content rows to worksheet starting from row 2
-      XLSX.utils.sheet_add_aoa(worksheet, contentRows, { origin: 'A2' });
-      
-      // Add worksheet to workbook
-      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
-      
-      // Write to file
-      XLSX.writeFile(workbook, filepath);
-      
+      // Set workbook properties
+      wb.Workbook = {
+        Views: [{ RTL: false }],
+        Sheets: [{
+          Hidden: 0,
+          Selected: true
+        }]
+      };
+
+      XLSX.writeFile(wb, filepath, { cellStyles: true });
       return true;
     } catch (error) {
       console.error('Error creating spreadsheet:', error);
       return false;
     }
-  }
-
-  // Helper method for API responses (creates buffer instead of file)
-  static createWorkbookBuffer(comments: Comment[]): Buffer {
-    // Create new workbook
-    const workbook = XLSX.utils.book_new();
-    
-    // Create worksheet with headers
-    const worksheet = this.createHeaderRow();
-    
-    // Add content rows
-    const contentRows = comments.map(comment => 
-      this.createContentRow(comment)
-    );
-    
-    // Add content rows to worksheet starting from row 2
-    XLSX.utils.sheet_add_aoa(worksheet, contentRows, { origin: 'A2' });
-    
-    // Add worksheet to workbook
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Formatted Comments');
-    
-    // Write to buffer
-    return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
   }
 } 
